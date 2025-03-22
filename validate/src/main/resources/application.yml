@@ -1,0 +1,61 @@
+spring:
+  application:
+    name: validation-service
+
+  # Spring Cloud Config ????
+  cloud:
+    config:
+      enabled: false
+
+  # RabbitMQ ??
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
+          max-interval: 10000
+          multiplier: 2.0
+
+# ?? ??
+server:
+  port: 8081
+
+# ?? ?? ??
+file:
+  upload-dir: ./uploads/temp
+
+# ?? ??
+logging:
+  level:
+    root: INFO
+    com.example: DEBUG
+    org.springframework.amqp: INFO
+
+# ????? ??
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+---
+# Docker ??? ??
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+  # Docker ??? RabbitMQ ??
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+
+# Docker ??? ?? ??
+file:
+  upload-dir: /app/uploads/temp
