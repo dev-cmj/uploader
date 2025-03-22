@@ -1,3 +1,6 @@
+server:
+  port: 8083
+
 spring:
   application:
     name: validation-service
@@ -21,16 +24,6 @@ spring:
           max-attempts: 3
           max-interval: 10000
           multiplier: 2.0
-antivirus:
-  enabled: false
-
-# ?? ??
-server:
-  port: 8081
-
-# ?? ?? ??
-file:
-  upload-dir: ./uploads/temp
 
 # ?? ??
 logging:
@@ -53,18 +46,36 @@ spring:
     activate:
       on-profile: docker
 
-  # Docker ??? RabbitMQ ??
+  # RabbitMQ ??
   rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:rabbitmq}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
     listener:
       simple:
         retry:
           enabled: true
-        acknowledge-mode: auto
-        auto-startup: true
-logging:
-  level:
-    org.springframework.amqp: DEBUG
+          initial-interval: 5000
+          max-attempts: 3
+          multiplier: 2.0
 
-# Docker ??? ?? ??
-file:
-  upload-dir: /app/uploads/temp
+  # ?? ??? ??
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+# MinIO ??
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://minio:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket-name: ${MINIO_BUCKET_NAME:content-pipeline}
+  temp-bucket-name: ${MINIO_TEMP_BUCKET_NAME:temp-uploads}
+  presigned-url-expiry: 7
+
+# ??? ??
+app:
+  upload:
+    temp-dir: /app/uploads/temp

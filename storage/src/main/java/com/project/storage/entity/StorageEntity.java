@@ -1,6 +1,9 @@
-package com.project.upload.entity;
+package com.project.storage.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -12,8 +15,8 @@ import java.util.UUID;
 @Entity
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "uploads")
-public class UploadEntity {
+@Table(name = "stored_files")
+public class StorageEntity {
 
     @Id
     private UUID id;
@@ -34,7 +37,13 @@ public class UploadEntity {
     private Long fileSize;
 
     @Column(nullable = false)
-    private String filePath;
+    private String sourcePath;
+
+    @Column(nullable = false)
+    private String storagePath;
+
+    @Column(nullable = false)
+    private String accessUrl;
 
     @Column(nullable = false)
     private String status;

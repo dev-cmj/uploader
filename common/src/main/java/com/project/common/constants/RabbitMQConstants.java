@@ -19,6 +19,10 @@ public class RabbitMQConstants {
     public static final String DLQ_QUEUE = "content.dlq.queue";
     public static final String STATUS_UPDATE_QUEUE = "content.status.update.queue";
 
+    // 청크 처리 관련 추가 (추가됨)
+    public static final String CHUNK_STORAGE_QUEUE = "content.chunk.storage.queue";
+    public static final String CHUNK_MERGER_QUEUE = "content.chunk.merger.queue";
+
     // Routing Key
     public static final String UPLOAD_ROUTING_KEY = "content.upload";
     public static final String VALIDATION_ROUTING_KEY = "content.validation";
@@ -28,11 +32,9 @@ public class RabbitMQConstants {
     public static final String DLQ_ROUTING_KEY = "content.dlq";
     public static final String STATUS_UPDATE_ROUTING_KEY = "content.status";
 
-    public static final String VALIDATION_REQUEST_QUEUE = "content.validation.request.queue";
-    public static final String VALIDATION_RESULT_QUEUE = "content.validation.result.queue";
-
-    public static final String VALIDATION_REQUEST_ROUTING_KEY = "content.validation.request";
-    public static final String VALIDATION_RESULT_ROUTING_KEY = "content.validation.result";
+    // 청크 처리 관련 추가 (추가됨)
+    public static final String CHUNK_STORAGE_ROUTING_KEY = "content.chunk.storage";
+    public static final String CHUNK_MERGER_ROUTING_KEY = "content.chunk.merger";
 
     // Content Type Routing Keys
     public static final String IMAGE_ROUTING_KEY = "content.type.image";
@@ -47,6 +49,11 @@ public class RabbitMQConstants {
     public static final String X_PRIORITY = "x-priority";
     public static final String X_ORIGINAL_EXCHANGE = "x-original-exchange";
     public static final String X_ORIGINAL_ROUTING_KEY = "x-original-routing-key";
+
+    // 청크 관련 헤더 키 (추가됨)
+    public static final String X_CHUNK_INDEX = "x-chunk-index";
+    public static final String X_TOTAL_CHUNKS = "x-total-chunks";
+    public static final String X_CONTENT_ID = "x-content-id";
 
     // 처리 우선순위
     public static final int PRIORITY_HIGH = 10;
@@ -63,4 +70,8 @@ public class RabbitMQConstants {
 
     // 메시지 TTL (밀리초)
     public static final int MESSAGE_TTL = 60000; // 1분
+
+    // 청크 관련 설정 (추가됨)
+    public static final int DEFAULT_CHUNK_SIZE = 1024 * 1024; // 1MB
+    public static final int CHUNK_MERGE_TIMEOUT = 300000; // 5분
 }

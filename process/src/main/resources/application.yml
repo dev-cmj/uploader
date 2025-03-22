@@ -1,6 +1,6 @@
 spring:
   application:
-    name: validation-service
+    name: process
 
   # Spring Cloud Config ????
   cloud:
@@ -21,22 +21,20 @@ spring:
           max-attempts: 3
           max-interval: 10000
           multiplier: 2.0
-antivirus:
-  enabled: false
 
 # ?? ??
 server:
-  port: 8081
+  port: 8082
 
 # ?? ?? ??
 file:
-  upload-dir: ./uploads/temp
+  processed-dir: ./uploads/processed
 
 # ?? ??
 logging:
   level:
     root: INFO
-    com.example: DEBUG
+    com.project: DEBUG
     org.springframework.amqp: INFO
 
 # ????? ??
@@ -55,16 +53,9 @@ spring:
 
   # Docker ??? RabbitMQ ??
   rabbitmq:
-    listener:
-      simple:
-        retry:
-          enabled: true
-        acknowledge-mode: auto
-        auto-startup: true
-logging:
-  level:
-    org.springframework.amqp: DEBUG
+    host: rabbitmq
+    port: 5672
 
 # Docker ??? ?? ??
 file:
-  upload-dir: /app/uploads/temp
+  processed-dir: /app/processed

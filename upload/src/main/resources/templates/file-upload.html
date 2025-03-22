@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>파일 업로드</title>
+  <!-- 웹소켓 리소스 포함 -->
+  <th:block th:replace="~{fragments/websocket :: websocket-resources}"></th:block>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+    }
+    .upload-form {
+      background-color: #f5f5f5;
+      padding: 20px;
+      border-radius: 5px;
+      margin-top: 20px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      display: none;
+    }
+    .error {
+      color: red;
+      margin-top: 10px;
+    }
+
+    /* 진행 상태 스타일 */
+    .progress-container {
+      margin-top: 30px;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      background-color: #f9f9f9;
+      display: none;
+    }
+
+    .steps {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .steps::before {
+      content: '';
+      position: absolute;
+      top: 16px;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background-color: #ddd;
+      z-index: 1;
+    }
+
+    .step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      z-index: 2;
+    }
+
+    .step-circle {
+      width: 35px;
+      height: 35px;
+      border-radius: 50%;
+      background-color: #ddd;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+      margin-bottom: 8px;
+    }
+
+    .step.active .step-circle {
+      background-color: #4CAF50;
+    }
+
+    .step.completed .step-circle {
+      background-color: #4CAF50;
+    }
+
+    .step.failed .step-circle {
+      background-color: #f44336;
+    }
+
+    .step-label {
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .status-message {
+      text-align: center;
+      font-weight: bold;
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 4px;
+      background-color: #e7f7e7;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top-color: #4CAF50;
+      animation: spin 1s ease-in-out infinite;
+      margin-right: 10px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+<h1>콘텐츠 파일 업로드</h1>
+
+<div class="upload-form">
+  <form id="uploadForm" enctype="multipart/form-data">
+    <div class="form-group">
+      <label for="file">파일 선택:</label>
+      <input type="file" id="file" name="file" required>
+    </div>
+
+    <div class="form-group">
+      <label for="userId">사용자 ID:</label>
+      <input type="text" id="userId" name="userId" required>
+    </div>
+
+    <div class="form-group">
+      <label for="priority">처리 우선순위:</label>
+      <select id="priority" name="priority">
+        <option value="MEDIUM">보통</option>
+        <option value="HIGH">높음</option>
+        <option value="LOW">낮음</option>
+      </select>
+    </div>
+
+    <button type="submit" id="uploadButton">업로드</button>
+    <button type="button" id="cancelButton" style="background-color: #f44336;">취소</button>
+  </form>
+
+  <div id="error" class="error"></div>
+</div>
+
+<div id="result" class="result">
+  <h3>업로드 정보</h3>
+  <div id="resultContent"></div>
+</div>
+
+<div id="progressContainer" class="progress-container">
+  <h3>처리 진행 상태</h3>
+  <div class="steps">
+    <div class="step active" id="step-upload">
+      <div class="step-circle">1</div>
+      <div class="step-label">업로드</div>
+    </div>
+    <div class="step" id="step-validation">
+      <div class="step-circle">2</div>
+      <div class="step-label">검증</div>
+    </div>
+    <div class="step" id="step-processing">
+      <div class="step-circle">3</div>
+      <div class="step-label">처리</div>
+    </div>
+    <div class="step" id="step-storage">
+      <div class="step-circle">4</div>
+      <div class="step-label">저장</div>
+    </div>
+    <div class="step" id="step-complete">
+      <div class="step-circle">5</div>
+      <div class="step-label">완료</div>
+    </div>
+  </div>
+  <div class="status-message" id="statusMessage">
+    <div class="loading-spinner"></div>
+    <span>파일 업로드 중...</span>
+  </div>
+</div>
+
+<!-- 웹소켓 클라이언트 포함 -->
+<th:block th:replace="~{fragments/websocket :: websocket-client}"></th:block>
+
+<!-- jQuery 청크 업로드 스크립트 -->
+<script th:inline="javascript">
+  $(document).ready(function() {
+    // 설정
+    const CHUNK_SIZE = 1024 * 1024 * 2; // 2MB 청크 크기
+    let currentFile = null;
+    let chunks = [];
+    let contentId = null;
+    let uploadInProgress = false;
+
+    // 파일 선택 시 청크 분할
+    $('#file').on('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      currentFile = file;
+
+      // 파일을 청크로 분할
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      chunks = [];
+
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(file.size, start + CHUNK_SIZE);
+        chunks.push(file.slice(start, end));
+      }
+
+      console.log(`파일 "${file.name}" (${formatFileSize(file.size)})을 ${totalChunks}개 청크로 분할했습니다.`);
+    });
+
+    // 폼 제출 처리
+    $('#uploadForm').on('submit', async function(e) {
+      e.preventDefault();
+
+      if (!currentFile || uploadInProgress) return;
+
+      const userId = $('#userId').val();
+      if (!userId) {
+        $('#error').html('사용자 ID를 입력해주세요.');
+        return;
+      }
+
+      const priority = $('#priority').val();
+
+      // UI 초기화
+      $('#result').hide();
+      $('#error').html('');
+      $('#uploadButton').prop('disabled', true).text('업로드 중...');
+      $('#progressContainer').show();
+      $('.step').removeClass('active completed failed');
+      $('#step-upload').addClass('active');
+      $('#statusMessage span').text('파일 업로드 중...');
+
+      // 이전 웹소켓 연결 해제
+      WebSocketClient.disconnect();
+
+      uploadInProgress = true;
+      contentId = null;
+
+      try {
+        // 총 청크 수
+        const totalChunks = chunks.length;
+
+        // 청크 순차 업로드
+        for (let i = 0; i < totalChunks; i++) {
+          const chunk = chunks[i];
+          const formData = new FormData();
+
+          // 첫 번째 청크가 아닌 경우 이전에 생성된 contentId 사용
+          if (contentId) {
+            formData.append('contentId', contentId);
+          }
+
+          formData.append('file', new File([chunk], currentFile.name, { type: currentFile.type }));
+          formData.append('userId', userId);
+          formData.append('priority', priority);
+          formData.append('chunkIndex', i);
+          formData.append('totalChunks', totalChunks);
+
+          // 현재 진행 상태 표시
+          $('#statusMessage span').text(`파일 업로드 중... (${i+1}/${totalChunks})`);
+
+          // 청크 업로드 요청
+          const response = await fetch('/api/upload/stream', {
+            method: 'POST',
+            body: formData
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || '업로드 실패');
+          }
+
+          // 첫 번째 청크에서 contentId 저장
+          if (i === 0) {
+            contentId = data.id;
+          }
+
+          // 마지막 청크일 경우 결과 표시
+          if (i === totalChunks - 1) {
+            // 업로드 정보 표시
+            $('#result').show();
+            $('#resultContent').html(`
+                        <p><strong>ID:</strong> ${data.id}</p>
+                        <p><strong>파일명:</strong> ${data.fileName}</p>
+                        <p><strong>상태:</strong> ${data.status}</p>
+                    `);
+
+            // 웹소켓 연결 (상태 업데이트 수신)
+            WebSocketClient.connect(data.id, updateProgressUI);
+          }
+        }
+
+        // 업로드 완료 표시
+        $('#step-upload').removeClass('active').addClass('completed');
+        $('#step-validation').addClass('active');
+        $('#statusMessage span').text('파일 업로드가 완료되었습니다. 검증 대기 중...');
+
+      } catch (error) {
+        $('#error').html('오류: ' + (error.message || '업로드 중 오류가 발생했습니다.'));
+        $('#step-upload').removeClass('active').addClass('failed');
+        $('#statusMessage span').text('파일 업로드 실패: ' + (error.message || '알 수 없는 오류'));
+        $('.loading-spinner').hide();
+      } finally {
+        uploadInProgress = false;
+        $('#uploadButton').prop('disabled', false).text('업로드');
+      }
+    });
+
+    // 취소 버튼 이벤트
+    $('#cancelButton').on('click', function() {
+      window.location.href = '/list';
+    });
+
+    // 파일 크기 포맷 함수
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // 상태 업데이트에 따른 UI 변경 함수
+    function updateProgressUI(statusUpdate) {
+      console.log('상태 업데이트:', statusUpdate);
+
+      const $messageEl = $('#statusMessage span');
+      $messageEl.text(statusUpdate.message);
+
+      // 모든 단계 초기화
+      $('.step').removeClass('active completed failed');
+
+      // 상태에 따른 스텝 UI 업데이트
+      switch(statusUpdate.status) {
+        case 'UPLOADED':
+          $('#step-upload').addClass('completed');
+          $('#step-validation').addClass('active');
+          break;
+        case 'VALIDATING':
+          $('#step-upload').addClass('completed');
+          $('#step-validation').addClass('active');
+          break;
+        case 'VALIDATED':
+          $('#step-upload').addClass('completed');
+          $('#step-validation').addClass('completed');
+          $('#step-processing').addClass('active');
+          break;
+        case 'VALIDATION_FAILED':
+          $('#step-upload').addClass('completed');
+          $('#step-validation').addClass('failed');
+          $('.loading-spinner').hide();
+          break;
+        case 'PROCESSING':
+          $('#step-upload').addClass('completed');
+          $('#step-validation').addClass('completed');
+          $('#step-processing').addClass('active');
+          break;
+        case 'PROCESSED':
+          $('#step-upload').addClass('completed');
+          $('#step-validation').addClass('completed');
+          $('#step-processing').addClass('completed');
+          $('#step-storage').addClass('active');
+          break;
+        case 'STORING':
+          $('#step-upload').addClass('completed');
+          $('#step-validation').addClass('completed');
+          $('#step-processing').addClass('completed');
+          $('#step-storage').addClass('active');
+          break;
+        case 'STORED':
+          $('#step-upload').addClass('completed');
+          $('#step-validation').addClass('completed');
+          $('#step-processing').addClass('completed');
+          $('#step-storage').addClass('completed');
+          $('#step-complete').addClass('active');
+          break;
+        case 'COMPLETED':
+          $('#step-upload').addClass('completed');
+          $('#step-validation').addClass('completed');
+          $('#step-processing').addClass('completed');
+          $('#step-storage').addClass('completed');
+          $('#step-complete').addClass('completed');
+
+          // 다운로드 링크가 있으면 추가
+          if (statusUpdate.accessUrl) {
+            $messageEl.append('<br><a href="' + statusUpdate.accessUrl +
+                    '" target="_blank" style="color:#4CAF50; text-decoration:underline; margin-top:10px; display:inline-block;">다운로드</a>');
+          }
+
+          $('.loading-spinner').hide();
+          break;
+        case 'FAILED':
+          $('.loading-spinner').hide();
+
+          if (statusUpdate.message && statusUpdate.message.includes('검증')) {
+            $('#step-upload').addClass('completed');
+            $('#step-validation').addClass('failed');
+          } else if (statusUpdate.message && statusUpdate.message.includes('처리')) {
+            $('#step-upload').addClass('completed');
+            $('#step-validation').addClass('completed');
+            $('#step-processing').addClass('failed');
+          } else if (statusUpdate.message && statusUpdate.message.includes('저장')) {
+            $('#step-upload').addClass('completed');
+            $('#step-validation').addClass('completed');
+            $('#step-processing').addClass('completed');
+            $('#step-storage').addClass('failed');
+          } else {
+            $('#step-upload').addClass('completed');
+            $('#step-validation').addClass('completed');
+            $('#step-processing').addClass('completed');
+            $('#step-storage').addClass('completed');
+            $('#step-complete').addClass('failed');
+          }
+          break;
+      }
+    }
+  });
+</script>
+</body>
+</html>

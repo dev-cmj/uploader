@@ -2,9 +2,8 @@ package com.project.upload.api;
 
 import com.project.common.constants.RabbitMQConstants;
 import com.project.common.model.ContentMessage;
-import com.project.upload.service.FileStorageService;
-import com.project.upload.service.StatusUpdateService;
-import com.project.upload.service.UploadService;
+import com.project.common.model.ContentPriority;
+import com.project.common.model.ContentStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -18,17 +17,96 @@ import java.util.Map;
 import java.util.UUID;
 
 
-@RestController
-@RequestMapping("/api/v1/uploads")
-@RequiredArgsConstructor
 @Slf4j
+@RestController
+@RequestMapping("/api/upload")
+@RequiredArgsConstructor
 public class UploadRestController {
 
-    private final UploadService uploadService;
-    private final FileStorageService fileStorageService;
-    private final StatusUpdateService statusUpdateService;
     private final RabbitTemplate rabbitTemplate;
 
+    /**
+     * 청크 기반 대용량 파일 업로드 API
+     * 파일을 바로 스토리지로 스트리밍하고 검증 요청을 발행
+     */
+    @PostMapping("/stream")
+    public ResponseEntity<Map<String, Object>> streamUpload(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("userId") String userId,
+            @RequestParam(value = "priority", defaultValue = "LOW") String priority,
+            @RequestParam(value = "chunkIndex", defaultValue = "0") int chunkIndex,
+            @RequestParam(value = "totalChunks", defaultValue = "1") int totalChunks,
+            @RequestParam(value = "contentId", required = false) String contentIdStr) {
+
+        try {
+            log.info("File chunk upload: {} [{}/{}], size: {}",
+                    file.getOriginalFilename(), chunkIndex + 1, totalChunks, file.getSize());
+
+            log.info("userId: {}, priority: {}", userId, priority);
+
+            // 첫번째 청크인 경우 새 contentId 생성
+            UUID contentId = (contentIdStr == null || contentIdStr.isEmpty())
+                    ? UUID.randomUUID() : UUID.fromString(contentIdStr);
+
+            // 파일 정보 준비
+            String originalFilename = file.getOriginalFilename();
+            String contentType = file.getContentType();
+
+            // 청크 업로드 메시지 생성
+            ContentMessage message = createStreamingMessage(
+                    contentId, userId, originalFilename, contentType,
+                    file.getBytes(), file.getSize(), chunkIndex, totalChunks, priority);
+
+            // 저장 서비스로 바로 스트리밍
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConstants.CONTENT_EXCHANGE,
+                    RabbitMQConstants.CHUNK_STORAGE_ROUTING_KEY,
+                    message);
+
+            // 마지막 청크인 경우 검증 요청 발행
+            if (chunkIndex == totalChunks - 1) {
+                // 상태 업데이트
+                message.setStatus(ContentStatus.UPLOADED);
+                rabbitTemplate.convertAndSend(
+                        RabbitMQConstants.CONTENT_EXCHANGE,
+                        RabbitMQConstants.STATUS_UPDATE_ROUTING_KEY,
+                        message);
+
+                // 검증 요청
+                rabbitTemplate.convertAndSend(
+                        RabbitMQConstants.CONTENT_EXCHANGE,
+                        RabbitMQConstants.VALIDATION_ROUTING_KEY,
+                        message);
+
+                log.info("All chunks uploaded, validation request sent for content: {}", contentId);
+            }
+
+            // 응답 생성
+            Map<String, Object> response = new HashMap<>();
+            response.put("id", contentId);
+            response.put("fileName", originalFilename);
+            response.put("chunkIndex", chunkIndex);
+            response.put("totalChunks", totalChunks);
+            response.put("status", chunkIndex == totalChunks - 1
+                    ? ContentStatus.UPLOADED.name() : ContentStatus.UPLOADING.name());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Error uploading file chunk", e);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", e.getMessage());
+            response.put("status", ContentStatus.FAILED.name());
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 소형 파일용 단일 요청 업로드 API
+     * 작은 파일은 한 번에 업로드하고 저장/검증 요청
+     */
     @PostMapping
     public ResponseEntity<Map<String, Object>> uploadFile(
             @RequestParam("file") MultipartFile file,
@@ -36,35 +114,44 @@ public class UploadRestController {
             @RequestParam(value = "priority", defaultValue = "NORMAL") String priority) {
 
         try {
-            log.info("File upload request received: {}, size: {}", file.getOriginalFilename(), file.getSize());
+            log.info("Small file upload request: {}, size: {}", file.getOriginalFilename(), file.getSize());
 
-            // 1. 컨텐츠 ID 생성
+            // 컨텐츠 ID 생성
             UUID contentId = UUID.randomUUID();
 
-            // 2. 상태 초기화 - 검증 대기 중
-            statusUpdateService.sendStatusUpdate(contentId, "UPLOADED", "파일 업로드가 완료되었습니다. 검증 대기 중...");
-
-            // 3. 임시 디렉토리에 파일 저장
-            String tempFilePath = fileStorageService.storeTemporaryFile(file);
-
-            ContentMessage message = uploadService.processUpload(
+            // ContentMessage 객체 생성
+            ContentMessage message = createStreamingMessage(
                     contentId, userId, file.getOriginalFilename(),
-                    file.getContentType(), file.getSize(), tempFilePath, priority
-            );
+                    file.getContentType(), file.getBytes(), file.getSize(), 0, 1, priority);
 
-            // 5. RabbitMQ로 검증 요청 전송
+            message.setStatus(ContentStatus.UPLOADING);
+
+            // 저장 서비스로 직접 전송
             rabbitTemplate.convertAndSend(
                     RabbitMQConstants.CONTENT_EXCHANGE,
-                    RabbitMQConstants.VALIDATION_REQUEST_ROUTING_KEY,
+                    RabbitMQConstants.CHUNK_STORAGE_ROUTING_KEY,
                     message);
 
-            log.info("Validation request sent for content: {}, path: {}", contentId, tempFilePath);
+            // 상태 업데이트 (업로드 완료)
+            message.setStatus(ContentStatus.UPLOADED);
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConstants.CONTENT_EXCHANGE,
+                    RabbitMQConstants.STATUS_UPDATE_ROUTING_KEY,
+                    message);
 
-            // 6. 응답 생성
+            // 검증 서비스 요청
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConstants.CONTENT_EXCHANGE,
+                    RabbitMQConstants.VALIDATION_ROUTING_KEY,
+                    message);
+
+            log.info("File uploaded and sent for validation: {}", contentId);
+
+            // 응답 생성
             Map<String, Object> response = new HashMap<>();
             response.put("id", contentId);
             response.put("fileName", file.getOriginalFilename());
-            response.put("status", "UPLOADED");
+            response.put("status", ContentStatus.UPLOADED.name());
             response.put("message", "파일 업로드가 완료되었으며 검증이 진행 중입니다");
 
             return ResponseEntity.ok(response);
@@ -74,49 +161,29 @@ public class UploadRestController {
 
             Map<String, Object> response = new HashMap<>();
             response.put("error", e.getMessage());
-            response.put("status", "FAILED");
+            response.put("status", ContentStatus.FAILED.name());
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getUploadStatus(@PathVariable("id") UUID id) {
-        try {
-            ContentMessage message = uploadService.getUploadStatus(id);
+    private ContentMessage createStreamingMessage(UUID contentId, String userId, String fileName,
+                                                  String contentType, byte[] data, long fileSize,
+                                                  int chunkIndex, int totalChunks, String priority) {
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("id", message.getId());
-            response.put("fileName", message.getFileName());
-            response.put("status", message.getStatus());
-            response.put("createdAt", message.getCreatedAt());
-            response.put("updatedAt", message.getUpdatedAt());
-            response.put("statusMessage", getStatusMessage(message));
+        ContentMessage message = new ContentMessage();
+        message.setId(contentId.toString());
+        message.setUserId(userId);
+        message.setFileName(fileName);
+        message.setContentType(contentType);
+        message.setFileSize(fileSize);
+        message.setChunkIndex(chunkIndex);
+        message.setTotalChunks(totalChunks);
+        message.setContentData(data);  // 청크 데이터
+        message.setPriority(ContentPriority.valueOf(priority.toUpperCase()));
+        message.setStatus(ContentStatus.UPLOADING);
+        message.setTimestamp(System.currentTimeMillis());
 
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Error getting upload status", e);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("error", e.getMessage());
-
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-        }
-    }
-
-    private String getStatusMessage(ContentMessage message) {
-        return switch (message.getStatus()) {
-            case UPLOADED -> "파일이 업로드되었습니다.";
-            case VALIDATING -> "파일 검증 중입니다...";
-            case VALIDATED -> "파일 검증이 완료되었습니다.";
-            case INVALID -> "파일이 유효하지 않습니다: " + message.getErrorMessage();
-            case PROCESSING -> "파일 처리 중입니다...";
-            case PROCESSED -> "파일 처리가 완료되었습니다.";
-            case STORING -> "파일 저장 중입니다...";
-            case STORED -> "파일이 저장소에 저장되었습니다.";
-            case FAILED -> "처리 중 오류가 발생했습니다: " + message.getErrorMessage();
-            case COMPLETED -> "모든 처리가 완료되었습니다.";
-            default -> "상태: " + message.getStatus();
-        };
+        return message;
     }
 }

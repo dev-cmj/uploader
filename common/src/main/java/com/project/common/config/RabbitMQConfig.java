@@ -29,17 +29,16 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Queue validationRequestQueue() {
-        Map<String, Object> args = new HashMap<>();
-        args.put(RabbitMQConstants.X_DEAD_LETTER_EXCHANGE, RabbitMQConstants.DLX_EXCHANGE);
-        args.put(RabbitMQConstants.X_DEAD_LETTER_ROUTING_KEY, RabbitMQConstants.DLQ_ROUTING_KEY);
-        args.put(RabbitMQConstants.X_MESSAGE_TTL, RabbitMQConstants.MESSAGE_TTL);
-        return new Queue(VALIDATION_REQUEST_QUEUE, true, false, false, args);
+    public Queue validationQueue() {
+        return new Queue(RabbitMQConstants.VALIDATION_QUEUE, true);
     }
 
     @Bean
-    public Queue validationResultQueue() {
-        return new Queue(VALIDATION_RESULT_QUEUE, true);
+    public Binding validationBinding(Queue validationQueue, TopicExchange contentExchange) {
+        return BindingBuilder
+                .bind(validationQueue)
+                .to(contentExchange)
+                .with(RabbitMQConstants.VALIDATION_ROUTING_KEY);
     }
 
     @Bean
@@ -50,22 +49,6 @@ public class RabbitMQConfig {
     @Bean
     public Queue deadLetterQueue() {
         return new Queue(RabbitMQConstants.DLQ_QUEUE, true);
-    }
-
-    @Bean
-    public Binding validationRequestBinding(Queue validationRequestQueue, TopicExchange contentExchange) {
-        return BindingBuilder
-                .bind(validationRequestQueue)
-                .to(contentExchange)
-                .with(VALIDATION_REQUEST_ROUTING_KEY);
-    }
-
-    @Bean
-    public Binding validationResultBinding(Queue validationResultQueue, TopicExchange contentExchange) {
-        return BindingBuilder
-                .bind(validationResultQueue)
-                .to(contentExchange)
-                .with(VALIDATION_RESULT_ROUTING_KEY);
     }
 
     @Bean
@@ -82,6 +65,40 @@ public class RabbitMQConfig {
                 .bind(deadLetterQueue)
                 .to(deadLetterExchange)
                 .with(RabbitMQConstants.DLQ_ROUTING_KEY);
+    }
+
+    @Bean
+    public Queue chunkStorageQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put(RabbitMQConstants.X_DEAD_LETTER_EXCHANGE, RabbitMQConstants.DLX_EXCHANGE);
+        args.put(RabbitMQConstants.X_DEAD_LETTER_ROUTING_KEY, RabbitMQConstants.DLQ_ROUTING_KEY);
+        args.put(RabbitMQConstants.X_MESSAGE_TTL, RabbitMQConstants.MESSAGE_TTL);
+        return new Queue(RabbitMQConstants.CHUNK_STORAGE_QUEUE, true, false, false, args);
+    }
+
+    @Bean
+    public Binding chunkStorageBinding(Queue chunkStorageQueue, TopicExchange contentExchange) {
+        return BindingBuilder
+                .bind(chunkStorageQueue)
+                .to(contentExchange)
+                .with(RabbitMQConstants.CHUNK_STORAGE_ROUTING_KEY);
+    }
+
+    @Bean
+    public Queue chunkMergerQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put(RabbitMQConstants.X_DEAD_LETTER_EXCHANGE, RabbitMQConstants.DLX_EXCHANGE);
+        args.put(RabbitMQConstants.X_DEAD_LETTER_ROUTING_KEY, RabbitMQConstants.DLQ_ROUTING_KEY);
+        args.put(RabbitMQConstants.X_MESSAGE_TTL, RabbitMQConstants.MESSAGE_TTL);
+        return new Queue(RabbitMQConstants.CHUNK_MERGER_QUEUE, true, false, false, args);
+    }
+
+    @Bean
+    public Binding chunkMergerBinding(Queue chunkMergerQueue, TopicExchange contentExchange) {
+        return BindingBuilder
+                .bind(chunkMergerQueue)
+                .to(contentExchange)
+                .with(RabbitMQConstants.CHUNK_MERGER_ROUTING_KEY);
     }
 
     @Bean

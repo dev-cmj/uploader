@@ -20,6 +20,26 @@ services:
       timeout: 10s
       retries: 5
 
+  minio:
+    image: minio/minio
+    container_name: content-pipeline-minio
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   upload-service:
     build:
       context: .
@@ -33,10 +53,16 @@ services:
       - SPRING_RABBITMQ_PORT=5672
       - SPRING_RABBITMQ_USERNAME=guest
       - SPRING_RABBITMQ_PASSWORD=guest
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET_NAME=content-pipeline
     volumes:
       - upload_data:/app/uploads
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - app-network
@@ -52,10 +78,39 @@ services:
       - SPRING_RABBITMQ_PORT=5672
       - SPRING_RABBITMQ_USERNAME=guest
       - SPRING_RABBITMQ_PASSWORD=guest
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET_NAME=content-pipeline
     volumes:
       - upload_data:/app/uploads
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  storage-service:
+    build:
+      context: .
+      dockerfile: storage/Dockerfile
+    container_name: content-pipeline-storage
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET_NAME=content-pipeline
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - app-network
@@ -67,3 +122,4 @@ networks:
 volumes:
   rabbitmq_data:
   upload_data:
+  minio_data:
