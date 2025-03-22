@@ -75,14 +75,10 @@ public class FileStorageService {
     }
 
     public String storeTemporaryFile(MultipartFile file) {
-        // 임시 디렉토리에 저장
-        String tempDir = uploadDir + "/temp";
-        Path tempDirPath = Paths.get(tempDir);
-
         try {
-            Files.createDirectories(tempDirPath);
-            String fileName = UUID.randomUUID() + getFileExtension(file.getOriginalFilename());
-            Path targetPath = tempDirPath.resolve(fileName);
+            String originalFileName = StringUtils.cleanPath(file.getOriginalFilename());
+            String fileName = UUID.randomUUID() + getFileExtension(originalFileName);
+            Path targetPath = this.fileStorageLocation.resolve(fileName);
             Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
             return targetPath.toString();
         } catch (IOException e) {

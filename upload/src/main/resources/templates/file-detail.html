@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>파일 상세정보</title>
+    <!-- 웹소켓 리소스 포함 -->
+    <th:block th:replace="~{fragments/websocket :: websocket-resources}"></th:block>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .file-detail {
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .file-info {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .file-info-label {
+            font-weight: bold;
+            color: #555;
+        }
+        .status-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            text-align: center;
+        }
+        .status-uploaded {
+            background-color: #007bff;
+        }
+        .status-validating {
+            background-color: #6c757d;
+        }
+        .status-validated {
+            background-color: #28a745;
+        }
+        .status-invalid {
+            background-color: #dc3545;
+        }
+        .status-processing {
+            background-color: #fd7e14;
+        }
+        .status-processed {
+            background-color: #17a2b8;
+        }
+        .status-storing {
+            background-color: #6f42c1;
+        }
+        .status-stored {
+            background-color: #20c997;
+        }
+        .status-completed {
+            background-color: #20c997;
+        }
+        .status-failed {
+            background-color: #dc3545;
+        }
+        .progress-container {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        .progress-steps::before {
+            content: '';
+            position: absolute;
+            top: 16px;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background-color: #ddd;
+            z-index: 1;
+        }
+        .progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+        }
+        .step-circle {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            background-color: #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            margin-bottom: 8px;
+        }
+        .progress-step.active .step-circle {
+            background-color: #4CAF50;
+        }
+        .progress-step.completed .step-circle {
+            background-color: #4CAF50;
+        }
+        .progress-step.failed .step-circle {
+            background-color: #f44336;
+        }
+        .step-label {
+            font-size: 14px;
+            text-align: center;
+        }
+        .status-message {
+            text-align: center;
+            font-weight: bold;
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #e7f7e7;
+        }
+        .actions {
+            margin-top: 30px;
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .history-container {
+            margin-top: 30px;
+        }
+        .history-title {
+            font-size: 18px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        .history-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+        }
+        .history-item:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .history-status {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+<h1>파일 상세정보</h1>
+
+<div class="file-detail">
+    <div class="file-info">
+        <div class="file-info-label">ID:</div>
+        <div th:text="${file.id}"></div>
+
+        <div class="file-info-label">파일명:</div>
+        <div th:text="${file.fileName}"></div>
+
+        <div class="file-info-label">콘텐츠 타입:</div>
+        <div th:text="${file.contentType}"></div>
+
+        <div class="file-info-label">파일 유형:</div>
+        <div th:text="${file.fileType}"></div>
+
+        <div class="file-info-label">파일 크기:</div>
+        <div th:text="${#numbers.formatDecimal(file.fileSize / 1024, 0, 2) + ' KB'}"></div>
+
+        <div class="file-info-label">사용자 ID:</div>
+        <div th:text="${file.userId}"></div>
+
+        <div class="file-info-label">상태:</div>
+        <div>
+                <span th:id="'status-tag'"
+                      th:class="'status-tag status-' + ${#strings.toLowerCase(file.status)}"
+                      th:text="${file.status}"></span>
+        </div>
+
+        <div class="file-info-label">업로드 시간:</div>
+        <div th:text="${#temporals.format(file.createdAt, 'yyyy-MM-dd HH:mm:ss')}"></div>
+
+        <div class="file-info-label">마지막 업데이트:</div>
+        <div th:id="'update-time'" th:text="${#temporals.format(file.updatedAt, 'yyyy-MM-dd HH:mm:ss')}"></div>
+
+        <div class="file-info-label" th:if="${file.errorMessage}">오류 메시지:</div>
+        <div th:if="${file.errorMessage}" th:text="${file.errorMessage}" style="color: red;"></div>
+    </div>
+
+    <div class="progress-container">
+        <div class="progress-steps">
+            <div class="progress-step" id="step-upload" th:classappend="${file.status == 'UPLOADED' ? 'active' : (file.status == 'VALIDATING' || file.status == 'VALIDATED' || file.status == 'PROCESSING' || file.status == 'PROCESSED' || file.status == 'STORING' || file.status == 'STORED' || file.status == 'COMPLETED' ? 'completed' : '')}">
+                <div class="step-circle">1</div>
+                <div class="step-label">업로드</div>
+            </div>
+            <div class="progress-step" id="step-validation" th:classappend="${file.status == 'VALIDATING' ? 'active' : (file.status == 'VALIDATED' || file.status == 'PROCESSING' || file.status == 'PROCESSED' || file.status == 'STORING' || file.status == 'STORED' || file.status == 'COMPLETED' ? 'completed' : (file.status == 'INVALID' ? 'failed' : ''))}">
+                <div class="step-circle">2</div>
+                <div class="step-label">검증</div>
+            </div>
+            <div class="progress-step" id="step-processing" th:classappend="${file.status == 'PROCESSING' ? 'active' : (file.status == 'PROCESSED' || file.status == 'STORING' || file.status == 'STORED' || file.status == 'COMPLETED' ? 'completed' : (file.status == 'FAILED' && file.errorMessage != null && file.errorMessage.contains('처리') ? 'failed' : ''))}">
+                <div class="step-circle">3</div>
+                <div class="step-label">처리</div>
+            </div>
+            <div class="progress-step" id="step-storage" th:classappend="${file.status == 'STORING' ? 'active' : (file.status == 'STORED' || file.status == 'COMPLETED' ? 'completed' : (file.status == 'FAILED' && file.errorMessage != null && file.errorMessage.contains('저장') ? 'failed' : ''))}">
+                <div class="step-circle">4</div>
+                <div class="step-label">저장</div>
+            </div>
+            <div class="progress-step" id="step-complete" th:classappend="${file.status == 'COMPLETED' ? 'completed' : ''}">
+                <div class="step-circle">5</div>
+                <div class="step-label">완료</div>
+            </div>
+        </div>
+        <div class="status-message" id="status-message">
+            <span th:text="${statusMessage}"></span>
+        </div>
+    </div>
+
+    <div class="actions">
+        <a href="/list" class="btn btn-secondary">목록으로</a>
+        <a th:if="${file.status == 'COMPLETED'}" th:href="@{'/download/' + ${file.id}}" class="btn btn-primary">다운로드</a>
+        <!-- 추가 액션 버튼들 -->
+    </div>
+</div>
+
+<div class="history-container">
+    <h2 class="history-title">처리 이력</h2>
+    <div th:if="${histories != null and !histories.empty}">
+        <div class="history-item" th:each="history : ${histories}">
+            <div>
+                <span th:text="${#temporals.format(history.timestamp, 'yyyy-MM-dd HH:mm:ss')}"></span>:
+                <span th:text="${history.message}"></span>
+            </div>
+            <div>
+                    <span th:class="'history-status status-' + ${#strings.toLowerCase(history.status)}"
+                          th:text="${history.status}"></span>
+            </div>
+        </div>
+    </div>
+    <div th:if="${histories == null or histories.empty}" style="padding: 10px; color: #666;">
+        처리 이력이 없습니다.
+    </div>
+</div>
+
+<!-- 웹소켓 클라이언트 포함 -->
+<th:block th:replace="~{fragments/websocket :: websocket-client}"></th:block>
+
+<script th:inline="javascript">
+    let fileId = /*[[${file.id}]]*/;
+
+    // 페이지 로드 시 웹소켓 연결
+    document.addEventListener('DOMContentLoaded', function() {
+        if (fileId) {
+            // 진행 중인 상태인 경우에만 실시간 업데이트 구독
+            let currentStatus = /*[[${file.status}]]*/;
+            const completedStatuses = ['COMPLETED', 'FAILED', 'INVALID'];
+
+            if (!completedStatuses.includes(currentStatus)) {
+                WebSocketClient.connect(fileId, handleStatusUpdate);
+            }
+        }
+    });
+
+    // 상태 업데이트 처리
+    function handleStatusUpdate(statusUpdate) {
+        console.log('상태 업데이트:', statusUpdate);
+
+        // 상태 태그 업데이트
+        const statusTag = document.getElementById('status-tag');
+        if (statusTag) {
+            statusTag.textContent = statusUpdate.status;
+            statusTag.className = 'status-tag status-' + statusUpdate.status.toLowerCase();
+        }
+
+        // 상태 메시지 업데이트
+        const statusMessage = document.getElementById('status-message');
+        if (statusMessage) {
+            statusMessage.querySelector('span').textContent = statusUpdate.message;
+        }
+
+        // 업데이트 시간 갱신
+        document.getElementById('update-time').textContent = new Date().toLocaleString();
+
+        // 진행 상태 단계 업데이트
+        updateProgressSteps(statusUpdate.status);
+
+        // 완료 상태인 경우 웹소켓 연결 해제
+        if (['COMPLETED', 'FAILED', 'INVALID'].includes(statusUpdate.status)) {
+            WebSocketClient.disconnect();
+
+            // 페이지 새로고침 (이력 업데이트를 위해)
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        }
+    }
+
+    // 진행 단계 업데이트
+    function updateProgressSteps(status) {
+        // 모든 단계 초기화
+        document.querySelectorAll('.progress-step').forEach(step => {
+            step.classList.remove('active', 'completed', 'failed');
+        });
+
+        // 상태에 따른 단계 설정
+        switch(status) {
+            case 'UPLOADED':
+                document.getElementById('step-upload').classList.add('completed');
+                document.getElementById('step-validation').classList.add('active');
+                break;
+            case 'VALIDATING':
+                document.getElementById('step-upload').classList.add('completed');
+                document.getElementById('step-validation').classList.add('active');
+                break;
+            case 'VALIDATED':
+                document.getElementById('step-upload').classList.add('completed');
+                document.getElementById('step-validation').classList.add('completed');
+                document.getElementById('step-processing').classList.add('active');
+                break;
+            case 'INVALID':
+                document.getElementById('step-upload').classList.add('completed');
+                document.getElementById('step-validation').classList.add('failed');
+                break;
+            case 'PROCESSING':
+                document.getElementById('step-upload').classList.add('completed');
+                document.getElementById('step-validation').classList.add('completed');
+                document.getElementById('step-processing').classList.add('active');
+                break;
+            case 'PROCESSED':
+                document.getElementById('step-upload').classList.add('completed');
+                document.getElementById('step-validation').classList.add('completed');
+                document.getElementById('step-processing').classList.add('completed');
+                document.getElementById('step-storage').classList.add('active');
+                break;
+            case 'STORING':
+                document.getElementById('step-upload').classList.add('completed');
+                document.getElementById('step-validation').classList.add('completed');
+                document.getElementById('step-processing').classList.add('completed');
+                document.getElementById('step-storage').classList.add('active');
+                break;
+            case 'STORED':
+                document.getElementById('step-upload').classList.add('completed');
+                document.getElementById('step-validation').classList.add('completed');
+                document.getElementById('step-processing').classList.add('completed');
+                document.getElementById('step-storage').classList.add('completed');
+                document.getElementById('step-complete').classList.add('active');
+                break;
+            case 'COMPLETED':
+                document.getElementById('step-upload').classList.add('completed');
+                document.getElementById('step-validation').classList.add('completed');
+                document.getElementById('step-processing').classList.add('completed');
+                document.getElementById('step-storage').classList.add('completed');
+                document.getElementById('step-complete').classList.add('completed');
+                break;
+            case 'FAILED':
+                document.getElementById('step-upload').classList.add('completed');
+                // 오류 단계는 메시지에 따라 결정해야 함
+                break;
+        }
+    }
+</script>
+</body>
+</html>

@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>파일 업로드</title>
+  <!-- 웹소켓 리소스 포함 -->
+  <th:block th:replace="~{fragments/websocket :: websocket-resources}"></th:block>
   <style>
+    /* 기존 스타일 유지 */
     body {
       font-family: Arial, sans-serif;
       max-width: 800px;
@@ -174,6 +177,7 @@
     </div>
 
     <button type="submit" id="uploadButton">업로드</button>
+    <button type="button" onclick="window.location.href='/list'" style="background-color: #f44336;">취소</button>
   </form>
 
   <div id="error" class="error"></div>
@@ -214,36 +218,11 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/stomp-websocket@2.3.4-next/lib/stomp.min.js"></script>
+<!-- 웹소켓 클라이언트 포함 -->
+<th:block th:replace="~{fragments/websocket :: websocket-client}"></th:block>
+
 <script th:inline="javascript">
-  let stompClient = null;
   let contentId = null;
-
-  // 웹소켓 연결 함수
-  function connectWebSocket(id) {
-    const socket = new SockJS('/ws');
-    stompClient = Stomp.over(socket);
-    stompClient.connect({}, function() {
-      console.log('웹소켓 연결 성공');
-
-      // 특정 콘텐츠 ID에 대한 상태 업데이트 구독
-      stompClient.subscribe('/queue/status/' + id, function(message) {
-        const statusUpdate = JSON.parse(message.body);
-        updateProgressUI(statusUpdate);
-      });
-    }, function(error) {
-      console.error('웹소켓 연결 실패:', error);
-    });
-  }
-
-  // 웹소켓 연결 해제
-  function disconnectWebSocket() {
-    if (stompClient !== null) {
-      stompClient.disconnect();
-      console.log('웹소켓 연결 해제');
-    }
-  }
 
   // 상태에 따른 UI 업데이트
   function updateProgressUI(statusUpdate) {
@@ -351,7 +330,7 @@
 
     try {
       // 이전 웹소켓 연결 해제
-      disconnectWebSocket();
+      WebSocketClient.disconnect();
 
       // 파일 업로드 요청
       const response = await fetch('/api/v1/uploads', {
@@ -377,10 +356,7 @@
 
         // 웹소켓 연결
         contentId = data.id;
-        connectWebSocket(contentId);
-
-        // 상태 폴링 시작 (웹소켓 보완용)
-        pollStatus(contentId);
+        WebSocketClient.connect(contentId, updateProgressUI);
       } else {
         errorDiv.innerHTML = `오류: ${data.error || '업로드 실패'}`;
         uploadButton.disabled = false;
@@ -388,41 +364,16 @@
       }
     } catch (error) {
       errorDiv.innerHTML = `오류: ${error.message || '업로드 중 오류가 발생했습니다.'}`;
+
+      // HTTP 응답 상태에 따른 추가 설명
+      if (error.status === 413) {
+        errorDiv.innerHTML = '파일 크기가 너무 큽니다. 200MB 이하의 파일만 업로드 가능합니다.';
+      }
+
       uploadButton.disabled = false;
       uploadButton.textContent = '업로드';
     }
   });
-
-  // 상태 폴링 함수 (웹소켓 장애 대비)
-  function pollStatus(id) {
-    const checkStatus = async () => {
-      try {
-        const response = await fetch(`/api/v1/uploads/${id}`);
-        if (response.ok) {
-          const data = await response.json();
-
-          // 상태가 최종 상태인 경우 폴링 중단
-          if (['COMPLETED', 'FAILED', 'INVALID'].includes(data.status)) {
-            clearInterval(pollInterval);
-            document.getElementById('uploadButton').disabled = false;
-            document.getElementById('uploadButton').textContent = '업로드';
-
-            // 최종 상태 업데이트
-            const statusUpdate = {
-              status: data.status,
-              message: data.statusMessage || `처리 ${data.status === 'COMPLETED' ? '완료' : '실패'}`
-            };
-            updateProgressUI(statusUpdate);
-          }
-        }
-      } catch (error) {
-        console.error('상태 확인 실패:', error);
-      }
-    };
-
-    // 10초 간격으로 상태 확인
-    const pollInterval = setInterval(checkStatus, 10000);
-  }
 </script>
 </body>
 </html>

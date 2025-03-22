@@ -57,7 +57,7 @@ public class RabbitMQConfig {
         return BindingBuilder
                 .bind(validationRequestQueue)
                 .to(contentExchange)
-                .with("content.validation.request");
+                .with(VALIDATION_REQUEST_ROUTING_KEY);
     }
 
     @Bean
@@ -65,7 +65,7 @@ public class RabbitMQConfig {
         return BindingBuilder
                 .bind(validationResultQueue)
                 .to(contentExchange)
-                .with("validation.result");
+                .with(VALIDATION_RESULT_ROUTING_KEY);
     }
 
     @Bean

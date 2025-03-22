@@ -67,6 +67,18 @@ public class UploadService {
         return mapEntityToMessage(entity);
     }
 
+    public void updateStatus(UUID id, ContentMessage.ProcessingStatus status, String errorMessage) {
+        UploadEntity entity = uploadRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Upload not found with id: " + id));
+
+        entity.setStatus(status.name());
+        entity.setErrorMessage(errorMessage);
+        entity.setUpdatedAt(LocalDateTime.now());
+
+        uploadRepository.save(entity);
+        log.info("Updating status for id {}: {}", id, status);
+    }
+
     private ContentMessage mapEntityToMessage(UploadEntity entity) {
         return ContentMessage.builder()
                 .id(entity.getId())
