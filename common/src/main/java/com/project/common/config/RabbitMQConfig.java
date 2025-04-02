@@ -42,6 +42,19 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public Queue processingQueue() {
+        return new Queue(RabbitMQConstants.PROCESSING_QUEUE, true);
+    }
+
+    @Bean
+    public Binding processingBinding(Queue processingQueue, TopicExchange contentExchange) {
+        return BindingBuilder
+                .bind(processingQueue)
+                .to(contentExchange)
+                .with(RabbitMQConstants.PROCESSING_ROUTING_KEY);
+    }
+
+    @Bean
     public Queue statusUpdateQueue() {
         return new Queue(RabbitMQConstants.STATUS_UPDATE_QUEUE, true);
     }

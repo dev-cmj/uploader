@@ -2,6 +2,7 @@ package com.project.process.consumer;
 
 import com.project.common.constants.RabbitMQConstants;
 import com.project.common.model.ContentMessage;
+import com.project.common.model.ContentStatus;
 import com.project.process.service.ContentProcessingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +24,7 @@ public class ProcessingConsumer {
 
         try {
             // 처리 상태로 업데이트
-            message.nextStage(ContentMessage.ProcessingStatus.PROCESSING);
+            message.nextStage(ContentStatus.PROCESSING);
             rabbitTemplate.convertAndSend(
                     RabbitMQConstants.CONTENT_EXCHANGE,
                     RabbitMQConstants.STATUS_UPDATE_ROUTING_KEY,
@@ -34,10 +35,10 @@ public class ProcessingConsumer {
 
             if (processedFilePath != null) {
                 // 처리 결과 파일 경로 설정
-                message.setDestinationPath(processedFilePath);
+                message.setAccessUrl(processedFilePath);
 
                 // 처리 완료 상태로 업데이트
-                message.nextStage(ContentMessage.ProcessingStatus.PROCESSED);
+                message.nextStage(ContentStatus.PROCESSED);
 
                 // 상태 업데이트 메시지 발행
                 rabbitTemplate.convertAndSend(
@@ -55,7 +56,7 @@ public class ProcessingConsumer {
             } else {
                 // 처리 실패
                 message.withError("Failed to process content");
-                message.nextStage(ContentMessage.ProcessingStatus.FAILED);
+                message.nextStage(ContentStatus.FAILED);
 
                 // 상태 업데이트 메시지 발행
                 rabbitTemplate.convertAndSend(
@@ -76,7 +77,7 @@ public class ProcessingConsumer {
 
             // 오류 상태로 업데이트
             message.withError("Processing error: " + e.getMessage());
-            message.nextStage(ContentMessage.ProcessingStatus.FAILED);
+            message.nextStage(ContentStatus.FAILED);
 
             // 상태 업데이트 메시지 발행
             rabbitTemplate.convertAndSend(

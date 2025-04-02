@@ -2,6 +2,7 @@ package com.project.upload.listener;
 
 import com.project.common.constants.RabbitMQConstants;
 import com.project.common.model.ContentMessage;
+import com.project.common.model.ContentStatus;
 import com.project.upload.service.StatusService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,11 @@ public class StatusUpdateConsumer {
             // 파일명 필드가 없는 경우 처리
             if (message.getFileName() == null || message.getFileName().isEmpty()) {
                 log.warn("Status update missing fileName for content: {}", message.getId());
+            }
+
+            //status에서 PROCCESSED 받을 경우 COMPLETED 호출
+            if (message.getStatus() == ContentStatus.PROCESSED) {
+                message.setStatus(ContentStatus.COMPLETED);
             }
 
             // 상태 업데이트 서비스 호출 (웹소켓 알림 포함)

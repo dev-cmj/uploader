@@ -6,9 +6,12 @@ import net.coobird.thumbnailator.Thumbnails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.InputStream;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
 @Slf4j
@@ -32,7 +35,7 @@ public class ContentProcessingService {
             Files.createDirectories(processedDirPath);
 
             // 원본 파일 경로
-            Path sourcePath = Paths.get(message.getSourcePath());
+            Path sourcePath = Paths.get(message.getAccessUrl());
 
             // 파일 타입에 따른 처리
             return switch (message.getFileType()) {
@@ -113,34 +116,62 @@ public class ContentProcessingService {
         return processDefault(sourcePath, processedDirPath, message);
     }
 
-    /**
-     * 기본 처리 (파일 복사)
-     */
     private String processDefault(Path sourcePath, Path processedDirPath, ContentMessage message) {
         try {
-            String originalFileName = sourcePath.getFileName().toString();
+            // URL에서 실제 파일 다운로드
+            Path downloadedFilePath = downloadFileFromUrl(message.getAccessUrl());
+
+            if (downloadedFilePath == null) {
+                log.error("파일 다운로드 실패: {}", message.getAccessUrl());
+                return null;
+            }
+
+            // 원본 파일 이름 및 확장자 추출
+            String originalFileName = downloadedFilePath.getFileName().toString();
             String extension = getFileExtension(originalFileName);
+
+            // 고유한 처리된 파일 이름 생성
             String processedFileName = UUID.randomUUID() + "-processed" + extension;
             Path destinationPath = processedDirPath.resolve(processedFileName);
 
-            Files.copy(sourcePath, destinationPath);
+            // 파일 복사
+            Files.copy(downloadedFilePath, destinationPath, StandardCopyOption.REPLACE_EXISTING);
 
-            log.info("File copied: {}", destinationPath);
+            log.info("파일 복사 완료: {}", destinationPath);
             return destinationPath.toString();
         } catch (Exception e) {
-            log.error("Error copying file", e);
+            log.error("파일 복사 중 오류 발생", e);
             return null;
         }
     }
 
     /**
-     * 파일 확장자 추출
+     * URL에서 파일 다운로드 메서드
+     */
+    private Path downloadFileFromUrl(String fileUrl) {
+        try {
+            URL url = new URL(fileUrl);
+            Path tempFile = Files.createTempFile("downloaded-", "-content");
+
+            try (InputStream inputStream = url.openStream()) {
+                Files.copy(inputStream, tempFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            return tempFile;
+        } catch (Exception e) {
+            log.error("URL에서 파일 다운로드 실패: {}", fileUrl, e);
+            return null;
+        }
+    }
+
+    /**
+     * 파일 확장자 추출 메서드
      */
     private String getFileExtension(String fileName) {
-        int lastDotIndex = fileName.lastIndexOf('.');
-        if (lastDotIndex > 0) {
-            return fileName.substring(lastDotIndex);
+        int lastIndexOf = fileName.lastIndexOf(".");
+        if (lastIndexOf == -1) {
+            return ""; // 확장자 없음
         }
-        return "";
+        return fileName.substring(lastIndexOf);
     }
 }
